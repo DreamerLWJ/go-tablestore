@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func getTestIMDB() *IMDB {
+func getTestIMDB() *TableStore {
 	db, err := NewBadgerDb(config.DBConfig{DataDir: "./data"})
 	if err != nil {
 		panic(err)
@@ -79,7 +79,7 @@ func TestIMDB_CreateIndex(t *testing.T) {
 	imdb := getTestIMDB()
 	defer imdb.CloseGracefully()
 
-	err := imdb.CreateIndex(IndexSetting{
+	err := imdb.CreateIndex(Index{
 		Fields: []string{"sender", "receiver", "create_time"},
 		Enable: true,
 	})
