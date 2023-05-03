@@ -1,29 +1,13 @@
 package core
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
-	"go-tablestore/api"
 	"go-tablestore/config"
 	"strings"
-)
-
-const (
-	_msgKeyPrefix          = "msg:"
-	_indexKeyPrefix        = "idx_vals:"
-	_indexSettingKeyPrefix = "idx_setting:"
-
-	_msgKeyFormat          = _msgKeyPrefix + "%020d"       // 一级索引配置
-	_indexKeyFormat        = _indexKeyPrefix + "%s:%s"     // 二级索引配置
-	_indexSettingKeyFormat = _indexSettingKeyPrefix + "%s" // 索引配置
-
-	_nullField = "NULL"
-
-	_indexSeparate = "-"
 )
 
 type TableStore struct {
@@ -46,23 +30,17 @@ func NewBadgerDb(dbCfg config.DBConfig) (*TableStore, error) {
 	return &TableStore{db: msgDB}, nil
 }
 
-func getMsgIDKey(msgID uint64) string {
-	keyBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(keyBytes, msgID)
-	return fmt.Sprintf(_msgKeyFormat, msgID)
-}
-
 func generateIdxKey(idxSetting Index, msg Message) string {
-	idxName := strings.Join(idxSetting.Fields, _indexSeparate)
-	idxValRaw := make([]string, 0, len(idxSetting.Fields)+1)
+	idxName := strings.Join(idxSetting.ColumnNames, _indexSeparate)
+	idxValRaw := make([]string, 0, len(idxSetting.ColumnNames)+1)
 
 	needAppendMsgId := true
-	for _, field := range idxSetting.Fields {
+	for _, field := range idxSetting.ColumnNames {
 		if strings.ToLower(field) == "msgid" {
 			idxValRaw = append(idxValRaw, cast.ToString(msg.MsgID))
 			needAppendMsgId = false
 		} else {
-			fieldVal, ok := msg.Columns[field]
+			fieldVal, ok := msg.ColumnValues[field]
 			if !ok {
 				idxValRaw = append(idxValRaw, _nullField)
 			} else {
@@ -83,8 +61,13 @@ func getIdxKeyWithNameVal(idxName string, idxVal string) string {
 }
 
 // GetDataByMsgId 根据 MsgId 获取
-func (i *TableStore) GetDataByMsgId(msgID uint64) (Message, error) {
-	key := getMsgIDKey(msgID)
+func (i *TableStore) GetDataByMsgId(tableName string, msgID uint64) (Message, error) {
+	tableInfo, err := i.GetMsgTableInfo(tableName)
+	if err != nil {
+		return Message{}, err
+	}
+
+	key := GenerateMsgKey(tableName, msgID)
 
 	var result []byte
 	err := i.db.View(func(txn *badger.Txn) error {
@@ -151,12 +134,12 @@ func (i *TableStore) SaveMessage(msg Message) error {
 // TODO 思考：创建索引时需要协程异步，还是上 MDL 锁
 func (i *TableStore) CreateIndex(idx Index) error {
 	// 检查索引是否已经存在
-	_, exist, err := i.GetIndex(idx.Fields)
+	_, exist, err := i.GetIndex(idx.ColumnNames)
 	if err != nil {
 		return errors.Errorf("TableStore|CreateIndex i.GetIndex err:%s", err)
 	}
 	if exist {
-		return errors.Errorf("TableStore|CreateIndex index %v already exist", idx.Fields)
+		return errors.Errorf("TableStore|CreateIndex index %v already exist", idx.ColumnNames)
 	}
 
 	err = i.db.Update(func(txn *badger.Txn) error {
@@ -189,7 +172,7 @@ func (i *TableStore) CreateIndex(idx Index) error {
 		}
 
 		// 插入索引配置
-		idxSettingKey := getIdxSettingKey(idx.Fields)
+		idxSettingKey := getIdxSettingKey(idx.ColumnNames)
 		idxVBytes, err := json.Marshal(idx)
 		if err != nil {
 			return err
@@ -212,7 +195,7 @@ func (i *TableStore) ListIndex() (res []Index, err error) {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
-		for it.Seek([]byte(_indexSettingKeyPrefix)); it.ValidForPrefix([]byte(_indexSettingKeyPrefix)); it.Next() {
+		for it.Seek([]byte(_indexInfoKeyPrefix)); it.ValidForPrefix([]byte(_indexInfoKeyPrefix)); it.Next() {
 			item := it.Item()
 			vBytes, err := item.ValueCopy(nil)
 			if err != nil {
@@ -236,7 +219,7 @@ func (i *TableStore) ListIndex() (res []Index, err error) {
 
 func getIdxSettingKey(idxCols []string) string {
 	idxName := strings.Join(idxCols, _indexSeparate)
-	return fmt.Sprintf(_indexSettingKeyFormat, idxName)
+	return fmt.Sprintf(_indexInfoKeyFormat, idxName)
 }
 
 // GetIndex 获取索引
@@ -292,7 +275,7 @@ func (i *TableStore) GetAvailableIndexWithTx(txn *badger.Txn) ([]Index, error) {
 	defer it.Close()
 
 	var result []Index
-	for it.Seek([]byte(_indexSettingKeyPrefix)); it.ValidForPrefix([]byte(_indexSettingKeyPrefix)); it.Next() {
+	for it.Seek([]byte(_indexInfoKeyPrefix)); it.ValidForPrefix([]byte(_indexInfoKeyPrefix)); it.Next() {
 		item := it.Item()
 		valueBytes, err := item.ValueCopy(nil)
 		if err != nil {
@@ -310,23 +293,6 @@ func (i *TableStore) GetAvailableIndexWithTx(txn *badger.Txn) ([]Index, error) {
 			result = append(result, temp)
 		}
 	}
-	return result, nil
-}
-
-// RemoveIndexSetting 删除掉索引信息
-func (i *TableStore) RemoveIndexSetting(idxSetting Index) error {
-	return nil
-}
-
-// DropIndex 卸载索引
-// TODO 方案设计，将索引设置为不可用状态，然后异步卸载所有索引值
-func (i *TableStore) DropIndex(idx Index) error {
-	return nil
-}
-
-// SearchMessage 搜索消息
-func (i *TableStore) SearchMessage(option ...api.SearchOption) ([]Message, error) {
-	var result []Message
 	return result, nil
 }
 

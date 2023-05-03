@@ -32,7 +32,7 @@ func TestIMDB_SaveMessage(t *testing.T) {
 
 	err := imdb.SaveMessage(Message{
 		MsgID: 1,
-		Columns: map[string]interface{}{
+		ColumnValues: map[string]interface{}{
 			"sender":      123,
 			"receiver":    456,
 			"create_time": "2023-05-02 17:56:00",
@@ -59,7 +59,7 @@ func TestIMDB_SaveMessage2(t *testing.T) {
 			for i := 0; i < 20; i++ {
 				err := imdb.SaveMessage(Message{
 					MsgID: uint64(i + index*20),
-					Columns: map[string]interface{}{
+					ColumnValues: map[string]interface{}{
 						"sender":      i,
 						"receiver":    i*10 + index*20,
 						"create_time": time.Now().Format("2006-01-02 15:04:05"),
@@ -80,8 +80,8 @@ func TestIMDB_CreateIndex(t *testing.T) {
 	defer imdb.CloseGracefully()
 
 	err := imdb.CreateIndex(Index{
-		Fields: []string{"sender", "receiver", "create_time"},
-		Enable: true,
+		ColumnNames: []string{"sender", "receiver", "create_time"},
+		Enable:      true,
 	})
 
 	if err != nil {
