@@ -9,7 +9,7 @@ import (
 )
 
 func getTestIMDB() *TableStore {
-	db, err := NewBadgerDb(config.DBConfig{DataDir: "./data"})
+	db, err := NewTableStore(config.DBConfig{DataDir: "./data"})
 	if err != nil {
 		panic(err)
 	}
@@ -93,7 +93,7 @@ func TestIMDB_GetIndex(t *testing.T) {
 	imdb := getTestIMDB()
 	defer imdb.CloseGracefully()
 
-	res, exist, err := imdb.GetIndex([]string{"sender", "receiver", "create_time"})
+	res, exist, err := imdb.GetIndexInfo([]string{"sender", "receiver", "create_time"})
 	if err != nil {
 		panic(err)
 	}

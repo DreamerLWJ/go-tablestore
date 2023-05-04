@@ -122,13 +122,13 @@ func (m *MsgTable) ExistIndex(colNames []string) (exist bool) {
 	return false
 }
 
-// Index 索引设计，目前仅支持 B+ 树二级索引
-type Index struct {
-	IndexId uint64 `json:"indexCode"` // 索引唯一标识
-	// TODO 索引设计，不需要排序，理由是索引顺序也有意义
-	// TODO 需要排序，理由是更好判断查询是否匹配索引
-	ColumnNames []string `json:"fields"` // 索引字段，统一转为小写字母
-	Enable      bool     `json:"enable"` // 索引是否可用
+func (m *MsgTable) AddIndex(idx Index) bool {
+	if exist := m.ExistIndex(idx.ColumnNames); exist {
+		return false
+	}
+
+	m.Indexs = append(m.Indexs, idx)
+	return true
 }
 
 // ColumnInfo 数据列信息
@@ -136,35 +136,6 @@ type ColumnInfo struct {
 	ColumnName string     `json:"columnName"` // 列名
 	ColumnType ColumnType `json:"columnType"` // 列类型
 	Nullable   bool       `json:"nullable"`   // 是否可空
-}
-
-// GenerateIndexKey 生成二级索引 key
-func GenerateIndexKey(tableId uint64, colInfos map[string]ColumnInfo, idx Index, msg *Message) string {
-	// TODO 优化字符串拼接
-	keyParts := make([]string, 0, len(idx.ColumnNames))
-	for _, column := range idx.ColumnNames {
-		var keyPart string
-		var err error
-		colInfo, ok := colInfos[column]
-		if !ok {
-			// TODO invalid idx config
-		}
-
-		colData, ok := msg.ColumnValues[colInfo.ColumnName]
-		if !ok {
-			colData = _nullField
-		}
-		if column == "msgid" {
-			keyPart = GetPaddingMsgId(msg.MsgID)
-		} else {
-			keyPart, err = GetPaddingValue(colData, colInfo.ColumnType)
-			if err != nil {
-				// TODO
-			}
-		}
-		keyParts = append(keyParts, keyPart)
-	}
-	return fmt.Sprintf(_indexKeyFormat, tableId, idx.IndexId, strings.Join(keyParts, _indexSeparate))
 }
 
 // GetPaddingValue 可以选择在此扩展更多类型以达到节省空间的目的
@@ -201,10 +172,6 @@ func GetPaddingValue(val string, colType ColumnType) (string, error) {
 	default:
 		return "", errors.Errorf("unsupport type:%d", colType)
 	}
-}
-
-func GenerateIndexInfoKey(tableId uint64, idxId uint64) string {
-	return fmt.Sprintf(_indexInfoKeyFormat, tableId, idxId)
 }
 
 func GenerateDBKey() string {

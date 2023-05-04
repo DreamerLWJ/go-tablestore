@@ -53,29 +53,53 @@ func (i *TableStore) SaveDBInfoWithTx(tx *badger.Txn, info DBInfo) error {
 }
 
 // GetMsgTableInfo 获取表信息
-func (i *TableStore) GetMsgTableInfo(tableName string) (res MsgTable, err error) {
-	key := GenerateTableInfoKey(tableName)
-
+func (i *TableStore) GetMsgTableInfo(tableName string) (res MsgTable, exist bool, err error) {
 	err = i.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			return err
+		res, exist, err = i.GetMsgTableInfoWithTx(txn, tableName)
+		return err
+	})
+	return
+}
+
+func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (res MsgTable, exist bool, err error) {
+	key := GenerateTableInfoKey(tableName)
+	item, err := txn.Get([]byte(key))
+	if err != nil {
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			exist = false
+			return MsgTable{}, false, nil
 		}
-		err = item.Value(func(val []byte) error {
-			if err := json.Unmarshal(val, &res); err != nil {
-				return err
-			}
-			return nil
-		})
-		if err != nil {
+		return MsgTable{}, false, err
+	}
+	err = item.Value(func(val []byte) error {
+		if err := json.Unmarshal(val, &res); err != nil {
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		return MsgTable{}, errors.Errorf("TableStore|GetMsgTableInfo err:%s", err)
+		return MsgTable{}, false, err
 	}
 	return
+}
+
+// SaveMsgTableInfo 保存表信息
+func (i *TableStore) SaveMsgTableInfo(tbInfo MsgTable) error {
+	key := GenerateTableInfoKey(tbInfo.TableName)
+	tbInfoBytes, err := json.Marshal(tbInfo)
+	if err != nil {
+		return err
+	}
+
+	if err = i.db.Update(func(txn *badger.Txn) error {
+		if err := txn.Set([]byte(key), tbInfoBytes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateMsgTable 创建消息表
@@ -202,16 +226,29 @@ func (i *TableStore) DropMsgTable(tableName string) error {
 
 // AddColumn 添加列
 func (i *TableStore) AddColumn(tableName string, colInfo ColumnInfo) error {
-	res, err := i.GetMsgTableInfo(tableName)
-	if err != nil {
+	if err := i.db.Update(func(txn *badger.Txn) error {
+		tableInfo, err := i.GetMsgTableInfoWithTx(txn, tableName)
+		if err != nil {
+			return err
+		}
+		if exist := tableInfo.ExistColumn(colInfo.ColumnName); exist {
+			return NewTableStoreErrWithExt(ErrTableAlreadyExist, map[string]interface{}{
+				"column": colInfo.ColumnName,
+			})
+		}
+
+		tableInfo.AddColumnInfo(colInfo)
+		if err = i.SaveMsgTableInfo(tableInfo); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
-	i.db.Update(func(txn *badger.Txn) error {
-
-	})
+	return nil
 }
 
-// DropColumn 卸载列信息
+// DropColumn 删除列，同时会删除掉列的所有数据
 func (i *TableStore) DropColumn() {
 
 }

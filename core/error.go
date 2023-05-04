@@ -6,6 +6,8 @@ var (
 	ErrTableAlreadyExist = errors.Errorf("table already exist")
 	ErrTableNotFound     = errors.Errorf("table not found")
 
+	ErrColumnAlreadyExist = errors.Errorf("column already exist") // column already exist when adding column
+
 	ErrMessageColumnTypeInvalid = errors.Errorf("msg column type invalid") // 消息字段数据类型错误
 )
 
