@@ -201,8 +201,14 @@ func (i *TableStore) DropMsgTable(tableName string) error {
 }
 
 // AddColumn 添加列
-func (i *TableStore) AddColumn() {
+func (i *TableStore) AddColumn(tableName string, colInfo ColumnInfo) error {
+	res, err := i.GetMsgTableInfo(tableName)
+	if err != nil {
+		return err
+	}
+	i.db.Update(func(txn *badger.Txn) error {
 
+	})
 }
 
 // DropColumn 卸载列信息

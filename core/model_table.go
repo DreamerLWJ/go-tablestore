@@ -86,9 +86,40 @@ func (m *MsgTable) ExistColumn(colName string) (exist bool) {
 	return false
 }
 
+func (m *MsgTable) AddColumnInfo(colInfo ColumnInfo) bool {
+	if m.ExistColumn(colInfo.ColumnName) {
+		return false
+	}
+	return true
+}
+
+func (m *MsgTable) DelColumnInfo(colName string) bool {
+	index := -1
+	for i, column := range m.Columns {
+		if column.ColumnName == colName {
+			index = i
+		}
+	}
+
+	if index == -1 {
+		return false
+	}
+
+	m.Columns = append(m.Columns[:index], m.Columns[index+1:]...)
+	return true
+}
+
 // ExistIndex return if index exist
 func (m *MsgTable) ExistIndex(colNames []string) (exist bool) {
-
+	colMerge := strings.Join(colNames, _indexSeparate)
+	colMerge = strings.ToLower(colMerge)
+	for _, index := range m.Indexs {
+		idxMerge := strings.Join(index.ColumnNames, _indexSeparate)
+		if colMerge == idxMerge {
+			return true
+		}
+	}
+	return false
 }
 
 // Index 索引设计，目前仅支持 B+ 树二级索引
