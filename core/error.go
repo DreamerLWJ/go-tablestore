@@ -3,6 +3,10 @@ package core
 import "github.com/pkg/errors"
 
 var (
+	ErrParamMsgId         = errors.Errorf("msgId not allow nil")
+	ErrColumnNotAllowNull = errors.Errorf("column not allow nil")
+	ErrColumnTypeInvalid  = errors.Errorf("column type invalid")
+
 	ErrTableAlreadyExist = errors.Errorf("table already exist")
 	ErrTableNotFound     = errors.Errorf("table not found")
 

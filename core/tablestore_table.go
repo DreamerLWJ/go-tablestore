@@ -76,6 +76,7 @@ func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (r
 		if err := json.Unmarshal(val, &res); err != nil {
 			return err
 		}
+		exist = true
 		return nil
 	})
 	if err != nil {
@@ -170,24 +171,28 @@ func (i *TableStore) generateNewTableId() (tableId uint64, err error) {
 	err = i.db.Update(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(_globalTableIdKey))
 		if err != nil {
-			return err
-		}
-		err = item.Value(func(val []byte) error {
-			res := GlobalTableId{}
-
-			err := json.Unmarshal(val, &res)
-			if err != nil {
-				return err
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				tableId = 1
+			} else {
+				return errors.Errorf("TableStore|generateNewTableId txn.Get err:%s", err)
 			}
+		} else {
+			if err = item.Value(func(val []byte) error {
+				res := GlobalTableId{}
 
-			tableId = res.Id
-			return nil
-		})
-		if err != nil {
-			return err
+				err := json.Unmarshal(val, &res)
+				if err != nil {
+					return err
+				}
+
+				tableId = res.Id
+				return nil
+			}); err != nil {
+				return errors.Errorf("TableStore|generateNewTableId err:%s", err)
+			}
 		}
 
-		incId := GlobalTableId{Id: tableId}
+		incId := GlobalTableId{Id: tableId + 1}
 		incIdBytes, err := json.Marshal(incId)
 		if err != nil {
 			return err

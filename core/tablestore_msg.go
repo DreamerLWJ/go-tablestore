@@ -26,6 +26,40 @@ func (i *TableStore) SaveMessage(tableName string, msg *Message) error {
 			})
 		}
 
+		// check if msg valid
+		if msg.MsgID == 0 {
+			return NewTableStoreErrWithExt(ErrParamMsgId, nil)
+		}
+		for _, column := range tbInfo.Columns {
+			// check not null column
+			if !column.Nullable {
+				_, exist := msg.ColumnValues[column.ColumnName]
+				if !exist {
+					return NewTableStoreErrWithExt(ErrColumnNotAllowNull, map[string]interface{}{
+						"column": column,
+					})
+				}
+			}
+
+			// check type
+			switch column.ColumnType {
+			case ColumnTypeInteger:
+				_, err := cast.ToInt64E(msg.ColumnValues[column.ColumnName])
+				if err != nil {
+					return NewTableStoreErrWithExt(ErrColumnTypeInvalid, map[string]interface{}{
+						"column": column,
+					})
+				}
+			case ColumnTypeDouble:
+				_, err := cast.ToFloat64E(msg.ColumnValues[column.ColumnName])
+				if err != nil {
+					return NewTableStoreErrWithExt(ErrColumnTypeInvalid, map[string]interface{}{
+						"column": column,
+					})
+				}
+			}
+		}
+
 		// TODO check if msgId exist
 		msgKey := GenerateMsgKey(tbInfo.TableId, msg.MsgID)
 
@@ -61,11 +95,6 @@ func (i *TableStore) SaveMessage(tableName string, msg *Message) error {
 	return nil
 }
 
-// saveMessageIndex 保存消息的二级索引
-func (i *TableStore) saveMessageIndex() {
-
-}
-
 type MessageQuery struct {
 	TableName  string            `json:"tableName"` // 表名
 	MsgId      uint64            `json:"msgId"`     // 按照 msgId 查询
@@ -92,7 +121,6 @@ func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker
 	if query.MsgId != 0 {
 		seekKey = GenerateMsgKey(tbInfo.TableId, query.MsgId)
 		seekKeyPrefix = fmt.Sprintf(_msgKeyPrefix, tbInfo.TableId)
-		return
 	} else {
 		// 优化器选择索引
 		// TODO
