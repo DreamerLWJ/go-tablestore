@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/binary"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -18,9 +17,10 @@ const (
 )
 
 const (
-	_msgKeyPrefix       = "msg|t:%d|"
-	_indexKeyPrefix     = "idx_val|t:%d|"
-	_indexInfoKeyPrefix = "idx_cfg|t:%d|"
+	_msgKeyPrefix          = "msg|t:%d|"
+	_indexKeyPrefix        = "idx_val|t:%d|"
+	_indexInfoIdKeyPrefix  = "idx_inf_id|t:%d|"
+	_indexInfoColKeyPrefix = "idx_inf_col|t:%d|"
 
 	// 数据库元信息
 	_dbKeyFormat = "db_info"
@@ -28,14 +28,17 @@ const (
 	// 表信息：tb_inf|t:[table_name]
 	_tableInfoKeyFormat = "tb_inf|t:%s"
 
-	// 二级索引信息：idx_inf|t:%d|%d
-	_indexInfoKeyFormat = _indexInfoKeyPrefix + "%d" // 索引配置
+	// 二级索引信息的索引键：idx_inf_id|t:%d|tid:%d，索引唯一id
+	_indexInfoIdKeyFormat = _indexInfoIdKeyPrefix + "tid:%d" // 索引配置
+
+	// 二级索引信息：idx_inf_col|t:%d|col:%s，索引排序后的列
+	_indexInfoColKeyFormat = _indexInfoColKeyPrefix + "col:%s" //
 
 	// 表消息主键设计：msg|t:[table_code]|[padding_msg_id]
 	_msgKeyFormat = _msgKeyPrefix + "%s" // 消息主键
 
 	// 表二级索引设计：idx_val|t:[table_code]|i:[idx_code]|v:[idx_cols]
-	_indexKeyFormat = _indexKeyPrefix + "i:%d|%s" // 二级索引，
+	_indexKeyFormat = _indexKeyPrefix + "i:%d|v:%s" // 二级索引，
 
 	// 全局 TableId
 	_globalTableIdKey = "glb_tid"
@@ -151,6 +154,11 @@ func GetPaddingValue(val string, colType ColumnType) (string, error) {
 		}
 
 		s := strconv.FormatInt(valI, 10)
+		if valI < 0 {
+			s = "0" + s
+		} else {
+			s = "1" + s
+		}
 		return fmt.Sprintf("%020s", s), nil
 	case ColumnTypeDouble:
 		valD, err := cast.ToFloat64E(val)
@@ -174,7 +182,7 @@ func GetPaddingValue(val string, colType ColumnType) (string, error) {
 	}
 }
 
-func GenerateDBKey() string {
+func GenerateDBInfoKey() string {
 	return _dbKeyFormat
 }
 
@@ -188,7 +196,7 @@ func GenerateMsgKey(tableId uint64, msgId uint64) string {
 }
 
 func GetPaddingMsgId(msgId uint64) string {
-	keyBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(keyBytes, msgId)
-	return fmt.Sprintf("%020d", keyBytes)
+	//keyBytes := make([]byte, 8)
+	//binary.BigEndian.PutUint64(keyBytes, msgId)
+	return fmt.Sprintf("%020d", msgId)
 }
