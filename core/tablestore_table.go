@@ -8,25 +8,25 @@ import (
 )
 
 // GetDBInfo 获取数据库信息
-func (i *TableStore) GetDBInfo() (res DBInfo, err error) {
+func (i *TableStore) GetDBInfo() (res GlobalDBInfo, err error) {
 	err = i.db.View(func(txn *badger.Txn) error {
 		res, err = i.GetDBInfoWithTx(txn)
 		return err
 	})
 	if err != nil {
-		return DBInfo{}, err
+		return GlobalDBInfo{}, err
 	}
 	return
 }
 
-func (i *TableStore) GetDBInfoWithTx(txn *badger.Txn) (res DBInfo, err error) {
+func (i *TableStore) GetDBInfoWithTx(txn *badger.Txn) (res GlobalDBInfo, err error) {
 	key := GenerateDBInfoKey()
 	item, err := txn.Get([]byte(key))
 	if err != nil {
 		if errors.Is(err, badger.ErrKeyNotFound) {
-			return DBInfo{}, nil
+			return GlobalDBInfo{}, nil
 		} else {
-			return DBInfo{}, err
+			return GlobalDBInfo{}, err
 		}
 	}
 	if err = item.Value(func(val []byte) error {
@@ -35,12 +35,12 @@ func (i *TableStore) GetDBInfoWithTx(txn *badger.Txn) (res DBInfo, err error) {
 		}
 		return nil
 	}); err != nil {
-		return DBInfo{}, err
+		return GlobalDBInfo{}, err
 	}
 	return
 }
 
-func (i *TableStore) SaveDBInfoWithTx(tx *badger.Txn, info DBInfo) error {
+func (i *TableStore) SaveDBInfoWithTx(tx *badger.Txn, info GlobalDBInfo) error {
 	infoBytes, err := json.Marshal(info)
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (i *TableStore) SaveDBInfoWithTx(tx *badger.Txn, info DBInfo) error {
 }
 
 // GetMsgTableInfo 获取表信息
-func (i *TableStore) GetMsgTableInfo(tableName string) (res MsgTable, exist bool, err error) {
+func (i *TableStore) GetMsgTableInfo(tableName string) (res Table, exist bool, err error) {
 	err = i.db.View(func(txn *badger.Txn) error {
 		res, exist, err = i.GetMsgTableInfoWithTx(txn, tableName)
 		return err
@@ -62,15 +62,15 @@ func (i *TableStore) GetMsgTableInfo(tableName string) (res MsgTable, exist bool
 	return
 }
 
-func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (res MsgTable, exist bool, err error) {
+func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (res Table, exist bool, err error) {
 	key := GenerateTableInfoKey(tableName)
 	item, err := txn.Get([]byte(key))
 	if err != nil {
 		if errors.Is(err, badger.ErrKeyNotFound) {
 			exist = false
-			return MsgTable{}, false, nil
+			return Table{}, false, nil
 		}
-		return MsgTable{}, false, err
+		return Table{}, false, err
 	}
 	err = item.Value(func(val []byte) error {
 		if err := json.Unmarshal(val, &res); err != nil {
@@ -80,13 +80,13 @@ func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (r
 		return nil
 	})
 	if err != nil {
-		return MsgTable{}, false, err
+		return Table{}, false, err
 	}
 	return
 }
 
 // SaveMsgTableInfo 保存表信息
-func (i *TableStore) SaveMsgTableInfo(tbInfo MsgTable) error {
+func (i *TableStore) SaveMsgTableInfo(tbInfo Table) error {
 	if err := i.db.Update(func(txn *badger.Txn) error {
 		if err := i.SaveMsgTableInfoWithTx(txn, tbInfo); err != nil {
 			return err
@@ -98,7 +98,7 @@ func (i *TableStore) SaveMsgTableInfo(tbInfo MsgTable) error {
 	return nil
 }
 
-func (i *TableStore) SaveMsgTableInfoWithTx(txn *badger.Txn, tbInfo MsgTable) error {
+func (i *TableStore) SaveMsgTableInfoWithTx(txn *badger.Txn, tbInfo Table) error {
 	key := GenerateTableInfoKey(tbInfo.TableName)
 	tbInfoBytes, err := json.Marshal(tbInfo)
 	if err != nil {
@@ -135,7 +135,7 @@ func (i *TableStore) CreateMsgTable(tableName string, columns []ColumnInfo, idxs
 		for _, idx := range idxs {
 			idx.Enable = true
 		}
-		table := MsgTable{
+		table := Table{
 			TableName: tableName,
 			TableId:   id,
 			Columns:   columns,

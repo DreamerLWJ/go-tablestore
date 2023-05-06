@@ -52,19 +52,33 @@ func TestGetPaddingValue(t *testing.T) {
 	v3, err := GetPaddingValue(n3, ColumnTypeInteger)
 	assert.Nil(t, err)
 
-	orderStrs := []string{v1, v2, v3}
+	orderStrs := []string{v3, v2, v1}
 	sort.Strings(orderStrs)
 
-	for _, str := range orderStrs {
-		switch str {
-		case v1:
-			t.Log(n1)
-		case v2:
-			t.Log(n2)
-		case v3:
-			t.Log(n3)
-		}
-	}
+	assert.Equal(t, v1, orderStrs[0])
+	assert.Equal(t, v2, orderStrs[2])
+	assert.Equal(t, v3, orderStrs[1])
+
+	n4 := "-12.3"
+	n5 := "12.3"
+	n6 := "0.0"
+	n7 := "-12.4"
+	v4, err := GetPaddingValue(n4, ColumnTypeDouble)
+	assert.Nil(t, err)
+
+	v5, err := GetPaddingValue(n5, ColumnTypeDouble)
+	assert.Nil(t, err)
+
+	v6, err := GetPaddingValue(n6, ColumnTypeDouble)
+	assert.Nil(t, err)
+
+	v7, err := GetPaddingValue(n7, ColumnTypeDouble)
+	assert.Nil(t, err)
+
+	t.Log(v4 > v5)
+	t.Log(v4 > v7)
+	t.Log(v4 > v6)
+	t.Log(v5 > v6)
 }
 
 func TestName(t *testing.T) {

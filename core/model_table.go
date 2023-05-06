@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -48,11 +49,12 @@ const (
 	_indexSeparate = "-"
 )
 
-type DBInfo struct {
+// GlobalDBInfo 目前仅支持全局一个 DB
+type GlobalDBInfo struct {
 	TableNames []string // 拥有的消息表
 }
 
-func (d *DBInfo) ExistTable(tableName string) (exist bool) {
+func (d *GlobalDBInfo) ExistTable(tableName string) (exist bool) {
 	for _, name := range d.TableNames {
 		if name == tableName {
 			exist = true
@@ -62,7 +64,7 @@ func (d *DBInfo) ExistTable(tableName string) (exist bool) {
 	return
 }
 
-func (d *DBInfo) AddTable(tableName string) bool {
+func (d *GlobalDBInfo) AddTable(tableName string) bool {
 	if exist := d.ExistTable(tableName); exist {
 		return false
 	}
@@ -71,8 +73,8 @@ func (d *DBInfo) AddTable(tableName string) bool {
 	return true
 }
 
-// MsgTable 消息表，表没有主键，主键就是消息键
-type MsgTable struct {
+// Table 消息表，表没有主键，主键就是消息键
+type Table struct {
 	TableName string       `json:"tableName"` // 表名
 	TableId   uint64       `json:"tableCode"` // 表的唯一标识，用于节省存储空间
 	Columns   []ColumnInfo `json:"columns"`   // 列名
@@ -80,7 +82,7 @@ type MsgTable struct {
 }
 
 // ExistColumn return if column exist
-func (m *MsgTable) ExistColumn(colName string) (exist bool) {
+func (m *Table) ExistColumn(colName string) (exist bool) {
 	for _, column := range m.Columns {
 		if column.ColumnName == colName {
 			return true
@@ -89,14 +91,16 @@ func (m *MsgTable) ExistColumn(colName string) (exist bool) {
 	return false
 }
 
-func (m *MsgTable) AddColumnInfo(colInfo ColumnInfo) bool {
+// AddColumnInfo 添加列信息
+func (m *Table) AddColumnInfo(colInfo ColumnInfo) bool {
 	if m.ExistColumn(colInfo.ColumnName) {
 		return false
 	}
 	return true
 }
 
-func (m *MsgTable) DelColumnInfo(colName string) bool {
+// DelColumnInfo 删除列信息
+func (m *Table) DelColumnInfo(colName string) bool {
 	index := -1
 	for i, column := range m.Columns {
 		if column.ColumnName == colName {
@@ -107,13 +111,12 @@ func (m *MsgTable) DelColumnInfo(colName string) bool {
 	if index == -1 {
 		return false
 	}
-
 	m.Columns = append(m.Columns[:index], m.Columns[index+1:]...)
 	return true
 }
 
-// ExistIndex return if index exist
-func (m *MsgTable) ExistIndex(colNames []string) (exist bool) {
+// ExistIndexInfo 返回是否存在对应的索引
+func (m *Table) ExistIndexInfo(colNames []string) (exist bool) {
 	colMerge := strings.Join(colNames, _indexSeparate)
 	colMerge = strings.ToLower(colMerge)
 	for _, index := range m.Indexs {
@@ -125,8 +128,9 @@ func (m *MsgTable) ExistIndex(colNames []string) (exist bool) {
 	return false
 }
 
-func (m *MsgTable) AddIndex(idx Index) bool {
-	if exist := m.ExistIndex(idx.ColumnNames); exist {
+// AddIndexInfo 添加索引
+func (m *Table) AddIndexInfo(idx Index) bool {
+	if exist := m.ExistIndexInfo(idx.ColumnNames); exist {
 		return false
 	}
 
@@ -153,13 +157,13 @@ func GetPaddingValue(val string, colType ColumnType) (string, error) {
 			})
 		}
 
-		s := strconv.FormatInt(valI, 10)
+		var val string
 		if valI < 0 {
-			s = "0" + s
+			val = "0" + fmt.Sprintf("%020d", uint64(valI))
 		} else {
-			s = "1" + s
+			val = "1" + fmt.Sprintf("%020d", uint64(valI))
 		}
-		return fmt.Sprintf("%020s", s), nil
+		return val, nil
 	case ColumnTypeDouble:
 		valD, err := cast.ToFloat64E(val)
 		if err != nil {
@@ -169,12 +173,8 @@ func GetPaddingValue(val string, colType ColumnType) (string, error) {
 			})
 		}
 
-		s := strconv.FormatFloat(valD, 'f', -1, 64)
-		// 补零操作
-		for len(s) < 20 {
-			s = "0" + s
-		}
-		return s, nil
+		maxFloat := math.MaxFloat64 / 2
+		return strconv.FormatFloat(valD+maxFloat, 'f', -1, 64), nil
 	case ColumnTypeString:
 		return val, nil
 	default:
