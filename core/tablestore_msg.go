@@ -28,6 +28,7 @@ func (i *TableStore) SaveMessage(tableName string, msg *Message) error {
 
 		// check if msg valid
 		if msg.MsgID == 0 {
+			// generate msgId
 			return NewTableStoreErrWithExt(ErrParamMsgId, nil)
 		}
 		for _, column := range tbInfo.Columns {
@@ -70,7 +71,7 @@ func (i *TableStore) SaveMessage(tableName string, msg *Message) error {
 		}
 
 		// 生成索引
-		indexes, err := i.GetAvailableIndexWithTx(txn)
+		indexes, err := i.GetAvailableIndexWithTx(txn, tbInfo.TableId)
 		if err != nil {
 			return err
 		}
@@ -96,11 +97,31 @@ func (i *TableStore) SaveMessage(tableName string, msg *Message) error {
 }
 
 type MessageQuery struct {
-	TableName  string            `json:"tableName"` // 表名
-	MsgId      uint64            `json:"msgId"`     // 按照 msgId 查询
-	Marker     uint64            `json:"marker"`
-	PageSize   int               `json:"pageSize"`
-	FilterCond map[string]string `json:"filterCond"` // 过滤列条件，注意与索引结合
+	TableName string      `json:"tableName"` // 表名
+	MsgId     uint64      `json:"msgId"`     // 按照 msgId 查询
+	Marker    uint64      `json:"marker"`
+	PageSize  int         `json:"pageSize"`
+	EqCond    []QueryCond `json:"eqCond"` // 条件设计
+}
+
+type QueryCondOper int
+
+const (
+	Gt QueryCondOper = iota + 1 // 大于
+	Lt                          // 小于
+	Eq                          // 等于
+	Ge                          // 大于等于
+	Le                          // 小于等于
+
+	Null    // 为空
+	NotNull // 非空
+)
+
+// QueryCond 查询条件
+type QueryCond struct {
+	ColumnName  string        `json:"columnName"`
+	Oper        QueryCondOper // 比较运算
+	ColumnValue string        `json:"columnValue"`
 }
 
 func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker uint64, err error) {
@@ -114,6 +135,10 @@ func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker
 			"table": query.TableName,
 		})
 	}
+	colInfoMap := make(map[string]ColumnInfo, len(tbInfo.Columns))
+	for _, column := range tbInfo.Columns {
+		colInfoMap[column.ColumnName] = column
+	}
 
 	var seekKey string
 	var seekKeyPrefix string
@@ -122,8 +147,16 @@ func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker
 		seekKey = GenerateMsgKey(tbInfo.TableId, query.MsgId)
 		seekKeyPrefix = fmt.Sprintf(_msgKeyPrefix, tbInfo.TableId)
 	} else {
+		// 提取所有的条件字段
+		cols := make([]string, 0, len(query.EqCond))
+		for _, cond := range query.EqCond {
+			cols = append(cols, cond.ColumnName)
+		}
 		// 优化器选择索引
-		// TODO
+		plan := i.op.GeneratePlan(cols, tbInfo)
+		// 生成索引
+		seekKey = GenerateIndexKeyPrefixFromPlan(tbInfo, plan, query.EqCond)
+		seekKeyPrefix = GenerateIndexKeyPrefix(tbInfo.TableId, plan.Idx.IndexId)
 	}
 
 	result := make([]Message, 0, query.PageSize)
@@ -146,8 +179,17 @@ func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker
 				return err
 			}
 
-			// TODO 检查是否符合目标条件
+			// check if qualify marker
+			if msgItem.MsgID <= query.Marker {
+				continue
+			}
 
+			// check if msg valid
+			if i.checkQueryCond(colInfoMap, query.EqCond, &msgItem) {
+				continue
+			}
+
+			// check if over pageSize
 			result = append(result, msgItem)
 			if len(result) >= query.PageSize {
 				nextMarker = msgItem.MsgID
@@ -160,6 +202,141 @@ func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker
 		return nil, 0, errors.Errorf("TableStore|QueryMessage err:%s", err)
 	}
 	return result, nextMsgID, nil
+}
+
+func (i *TableStore) checkQueryCond(columnInfoMap map[string]ColumnInfo, conds []QueryCond, msg *Message) (skip bool) {
+	for _, cond := range conds {
+		v, notNull := msg.ColumnValues[cond.ColumnValue]
+		if !notNull {
+			if cond.Oper == NotNull {
+				skip = true
+				return
+			} else if cond.Oper == Null {
+
+			}
+		}
+
+		info, ok := columnInfoMap[cond.ColumnName]
+		if !ok {
+			// TODO 找不到列信息
+		}
+
+		switch info.ColumnType {
+		case ColumnTypeInteger:
+			vI, err := cast.ToInt64E(v)
+			if err != nil {
+				// TODO 数据库内部数据错误
+			}
+
+			cVI, err := cast.ToInt64E(cond.ColumnValue)
+			if err != nil {
+				// TODO 外部数据非法
+			}
+
+			// skip if not qualify
+			switch cond.Oper {
+			case Eq:
+				if !(vI == cVI) {
+					skip = true
+					return
+				}
+			case Gt:
+				if !(vI > cVI) {
+					skip = true
+					return
+				}
+			case Ge:
+				if !(vI >= cVI) {
+					skip = true
+					return
+				}
+			case Le:
+				if !(vI <= cVI) {
+					skip = true
+					return
+				}
+			case Lt:
+				if !(vI < cVI) {
+					skip = true
+					return
+				}
+			}
+		case ColumnTypeDouble:
+			vI, err := cast.ToFloat64E(v)
+			if err != nil {
+				// TODO 数据库内部数据错误
+			}
+
+			cVI, err := cast.ToFloat64E(cond.ColumnValue)
+			if err != nil {
+				// TODO 外部数据非法
+			}
+
+			// skip if not qualify
+			switch cond.Oper {
+			case Eq:
+				if !(vI == cVI) {
+					skip = true
+					return
+				}
+			case Gt:
+				if !(vI > cVI) {
+					skip = true
+					return
+				}
+			case Ge:
+				if !(vI >= cVI) {
+					skip = true
+					return
+				}
+			case Le:
+				if !(vI <= cVI) {
+					skip = true
+					return
+				}
+			case Lt:
+				if !(vI < cVI) {
+					skip = true
+					return
+				}
+			}
+		case ColumnTypeString:
+			vI := v
+			cVI := cond.ColumnValue
+
+			// skip if not qualify
+			switch cond.Oper {
+			case Eq:
+				if !(vI == cVI) {
+					skip = true
+					return
+				}
+			case Gt:
+				if !(vI > cVI) {
+					skip = true
+					return
+				}
+			case Ge:
+				if !(vI >= cVI) {
+					skip = true
+					return
+				}
+			case Le:
+				if !(vI <= cVI) {
+					skip = true
+					return
+				}
+			case Lt:
+				if !(vI < cVI) {
+					skip = true
+					return
+				}
+			}
+		default:
+			// TODO 不支持的类型
+		}
+	}
+	return false
 }
 
 // PrintAll 获取所有的键值

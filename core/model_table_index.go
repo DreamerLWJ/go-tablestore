@@ -20,6 +20,10 @@ func GenerateIndexInfoIdKey(tableId uint64, idxId uint64) string {
 	return fmt.Sprintf(_indexInfoIdKeyFormat, tableId, idxId)
 }
 
+func GenerateIndexInfoPrefix(tableId uint64) string {
+	return fmt.Sprintf(_indexInfoColKeyPrefix, tableId)
+}
+
 // GenerateIndexInfoColumnsKey 生成索引信息的列索引
 func GenerateIndexInfoColumnsKey(tableId uint64, colNames []string) string {
 	sort.Strings(colNames)
@@ -54,4 +58,49 @@ func GenerateIndexKey(tableId uint64, colInfos map[string]ColumnInfo, idx Index,
 		keyParts = append(keyParts, keyPart)
 	}
 	return fmt.Sprintf(_indexKeyFormat, tableId, idx.IndexId, strings.Join(keyParts, _indexSeparate))
+}
+
+func GenerateIndexKeyPrefix(tableId uint64, idxId uint64) string {
+	return fmt.Sprintf(_indexKeyPrefix, tableId, idxId)
+}
+
+// GenerateIndexKeyPrefixFromPlan 根据执行计划生成索引值
+func GenerateIndexKeyPrefixFromPlan(tbInfo Table, plan ExecutionPlan, conds []QueryCond) string {
+	if plan.PlanType != Idx {
+		return ""
+	}
+
+	// columnName -> ColumnInfo
+	colInfoMap := make(map[string]ColumnInfo, len(tbInfo.Columns))
+	for _, column := range tbInfo.Columns {
+		colInfoMap[column.ColumnName] = column
+	}
+
+	// columnName -> QueryCond
+	condMap := make(map[string]QueryCond, len(conds))
+	for _, cond := range conds {
+		condMap[cond.ColumnName] = cond
+	}
+
+	matchKeyParts := make([]string, 0, len(plan.ColumnsCombine))
+	for _, col := range plan.ColumnsCombine {
+		var matchKeyPart string
+		var err error
+
+		cond, ok := condMap[col]
+		if !ok {
+			// TODO 查询异常问题
+		}
+		info, ok := colInfoMap[col]
+		if !ok {
+			// TODO 查询异常问题
+		}
+		matchKeyPart, err = GetPaddingValue(cond.ColumnValue, info.ColumnType)
+		if err != nil {
+			// TODO
+		}
+
+		matchKeyParts = append(matchKeyParts, matchKeyPart)
+	}
+	return fmt.Sprintf(_indexKeyFormat, tbInfo.TableId, plan.Idx.IndexId, strings.Join(matchKeyParts, _indexSeparate))
 }

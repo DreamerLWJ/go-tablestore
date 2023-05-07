@@ -7,6 +7,7 @@ import (
 
 type TableStore struct {
 	db *badger.DB // TODO 索引和消息是否要存放在同一个 LSM Tree 中？
+	op QueryOptimizer
 }
 
 func NewTableStore(dbCfg config.DBConfig) (*TableStore, error) {
@@ -22,7 +23,7 @@ func NewTableStore(dbCfg config.DBConfig) (*TableStore, error) {
 		return nil, err
 	}
 
-	return &TableStore{db: msgDB}, nil
+	return &TableStore{db: msgDB, op: NewSimpleEqQueryOptimizer()}, nil
 }
 
 // CloseGracefully 请优雅关闭，不然会很头疼

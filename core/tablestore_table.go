@@ -110,8 +110,8 @@ func (i *TableStore) SaveMsgTableInfoWithTx(txn *badger.Txn, tbInfo Table) error
 	return nil
 }
 
-// CreateMsgTable 创建消息表
-func (i *TableStore) CreateMsgTable(tableName string, columns []ColumnInfo, idxs []Index) error {
+// CreateTable 创建消息表
+func (i *TableStore) CreateTable(tableName string, columns []ColumnInfo, idxs []Index) error {
 	if err := i.db.Update(func(txn *badger.Txn) error {
 		// check if table already exist
 		dbInfo, err := i.GetDBInfoWithTx(txn)
@@ -127,7 +127,7 @@ func (i *TableStore) CreateMsgTable(tableName string, columns []ColumnInfo, idxs
 		// save table info
 		id, err := i.generateNewTableId()
 		if err != nil {
-			return errors.Errorf("TableStore|CreateMsgTable i.generateNewTableId err:%s", err)
+			return errors.Errorf("TableStore|CreateTable i.generateNewTableId err:%s", err)
 		}
 		// TODO 要不要检查当前是否存在相应的表数据？
 
@@ -144,20 +144,20 @@ func (i *TableStore) CreateMsgTable(tableName string, columns []ColumnInfo, idxs
 		tableInfoKey := GenerateTableInfoKey(tableName)
 		tableBytes, err := json.Marshal(table)
 		if err != nil {
-			return errors.Errorf("TableStore|CreateMsgTable json.Marshal err:%s", err)
+			return errors.Errorf("TableStore|CreateTable json.Marshal err:%s", err)
 		}
 		if err = txn.Set([]byte(tableInfoKey), tableBytes); err != nil {
-			return errors.Errorf("TableStore|CreateMsgTable txn.Set err:%s", err)
+			return errors.Errorf("TableStore|CreateTable txn.Set err:%s", err)
 		}
 
 		// add table to meta info
 		_ = dbInfo.AddTable(tableName)
 		if err = i.SaveDBInfoWithTx(txn, dbInfo); err != nil {
-			return errors.Errorf("TableStore|CreateMsgTable i.SaveDBInfoWithTx err:%s", err)
+			return errors.Errorf("TableStore|CreateTable i.SaveDBInfoWithTx err:%s", err)
 		}
 		return nil
 	}); err != nil {
-		return errors.Errorf("TableStore|CreateMsgTable i.db.Update err:%s", err)
+		return errors.Errorf("TableStore|CreateTable i.db.Update err:%s", err)
 	}
 	return nil
 }
@@ -351,13 +351,18 @@ func (i *TableStore) CreateIndex(tableName string, idx Index) error {
 			}
 		}
 
-		// 插入索引配置
-		idxInfoKey := GenerateIndexInfoIdKey(tbInfo.TableId, idx.IndexId)
+		// 索引配置有两个索引
 		idxVBytes, err := json.Marshal(idx)
+		idxInfoKey := GenerateIndexInfoIdKey(tbInfo.TableId, idx.IndexId)
 		if err != nil {
 			return err
 		}
 		err = txn.Set([]byte(idxInfoKey), idxVBytes)
+		if err != nil {
+			return err
+		}
+		idxInfoColKey := GenerateIndexInfoColumnsKey(tbInfo.TableId, idx.ColumnNames)
+		err = txn.Set([]byte(idxInfoColKey), idxVBytes)
 		if err != nil {
 			return err
 		}
@@ -471,7 +476,7 @@ func (i *TableStore) GetIndexInfoById(tableName string, idxId uint64) (res Index
 }
 
 // GetAvailableIndex 获取可选择的索引列表
-func (i *TableStore) GetAvailableIndex() (res []Index, err error) {
+func (i *TableStore) GetAvailableIndex(tableId uint64) (res []Index, err error) {
 	tx := i.db.NewTransaction(false)
 	defer func() {
 		if err != nil {
@@ -483,17 +488,18 @@ func (i *TableStore) GetAvailableIndex() (res []Index, err error) {
 			}
 		}
 	}()
-	res, err = i.GetAvailableIndexWithTx(tx)
+	res, err = i.GetAvailableIndexWithTx(tx, tableId)
 	return
 }
 
 // GetAvailableIndexWithTx 用于 MVCC 级别
-func (i *TableStore) GetAvailableIndexWithTx(txn *badger.Txn) ([]Index, error) {
+func (i *TableStore) GetAvailableIndexWithTx(txn *badger.Txn, tableId uint64) ([]Index, error) {
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
+	prefix := GenerateIndexInfoPrefix(tableId)
 	var result []Index
-	for it.Seek([]byte(_indexInfoIdKeyPrefix)); it.ValidForPrefix([]byte(_indexInfoIdKeyPrefix)); it.Next() {
+	for it.Seek([]byte(prefix)); it.ValidForPrefix([]byte(prefix)); it.Next() {
 		item := it.Item()
 		valueBytes, err := item.ValueCopy(nil)
 		if err != nil {

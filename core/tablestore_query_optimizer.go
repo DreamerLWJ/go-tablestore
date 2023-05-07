@@ -1,16 +1,18 @@
 package core
 
+import "strings"
+
 // QueryOptimizer 查询优化器
 // TODO 带有索引下推的优化器？
 type QueryOptimizer interface {
-	GeneratePlan(FilterCond map[string]string, availableIdx []Index)
+	GeneratePlan(colNames []string, tbInfo Table) ExecutionPlan
 }
 
 type SimpleEqQueryOptimizer struct {
 }
 
-func NewSimpleEqQueryOptimizer() *SimpleEqQueryOptimizer {
-	return &SimpleEqQueryOptimizer{}
+func NewSimpleEqQueryOptimizer() SimpleEqQueryOptimizer {
+	return SimpleEqQueryOptimizer{}
 }
 
 // GeneratePlan 初期的优化器，仅支持等值查询判断；对于范围查询可以先定位到
@@ -19,6 +21,12 @@ func (s SimpleEqQueryOptimizer) GeneratePlan(colNames []string, tbInfo Table) (r
 	maxHitIdxPrefixLength := 0 // 命中最长的索引的前缀长度
 	var maxHitCombine []string // 命中最长的列组合
 
+	// to lower
+	for i, col := range colNames {
+		colNames[i] = strings.ToLower(col)
+	}
+
+	existMsgId := false
 	combines := permute(colNames)
 	for _, index := range tbInfo.Indexs {
 		for _, combine := range combines {
@@ -26,6 +34,10 @@ func (s SimpleEqQueryOptimizer) GeneratePlan(colNames []string, tbInfo Table) (r
 			for i := 0; i < len(index.ColumnNames) && i < len(combine); i++ {
 				if index.ColumnNames[i] == combine[i] {
 					hitIdxLength++
+
+					if combine[i] == "msgid" {
+						existMsgId = true
+					}
 				}
 			}
 
@@ -43,7 +55,11 @@ func (s SimpleEqQueryOptimizer) GeneratePlan(colNames []string, tbInfo Table) (r
 		res.ColumnsCombine = maxHitCombine
 		res.IdxPrefixLength = maxHitIdxPrefixLength
 	} else {
-		res.PlanType = All
+		if existMsgId {
+			res.PlanType = Primary
+		} else {
+			res.PlanType = All
+		}
 	}
 	return
 }

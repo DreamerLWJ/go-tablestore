@@ -19,7 +19,7 @@ const (
 
 const (
 	_msgKeyPrefix          = "msg|t:%d|"
-	_indexKeyPrefix        = "idx_val|t:%d|"
+	_indexKeyPrefix        = "idx_val|t:%d|i:%d|"
 	_indexInfoIdKeyPrefix  = "idx_inf_id|t:%d|"
 	_indexInfoColKeyPrefix = "idx_inf_col|t:%d|"
 
@@ -39,7 +39,7 @@ const (
 	_msgKeyFormat = _msgKeyPrefix + "%s" // 消息主键
 
 	// 表二级索引设计：idx_val|t:[table_code]|i:[idx_code]|v:[idx_cols]
-	_indexKeyFormat = _indexKeyPrefix + "i:%d|v:%s" // 二级索引，
+	_indexKeyFormat = _indexKeyPrefix + "v:%s" // 二级索引，
 
 	// 全局 TableId
 	_globalTableIdKey = "glb_tid"

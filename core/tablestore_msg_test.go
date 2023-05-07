@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	_testDateTimeFormat = "2006-01-02 15:04:05"
+)
+
 func getTestTableStore() *TableStore {
 	db, err := NewTableStore(config.DBConfig{DataDir: "./data"})
 	if err != nil {
@@ -63,7 +67,7 @@ func TestTableStore_QueryMessage(t *testing.T) {
 func TestTableStore_CreateMsgTable(t *testing.T) {
 	tableStore := getTestTableStore()
 	defer tableStore.CloseGracefully()
-	err := tableStore.CreateMsgTable("test-table", []ColumnInfo{
+	err := tableStore.CreateTable("test-table", []ColumnInfo{
 		{
 			ColumnName: "create_time",
 			ColumnType: ColumnTypeString,
