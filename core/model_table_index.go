@@ -65,7 +65,7 @@ func GenerateIndexKeyPrefix(tableId uint64, idxId uint64) string {
 }
 
 // GenerateIndexKeyPrefixFromPlan 根据执行计划生成索引值
-func GenerateIndexKeyPrefixFromPlan(tbInfo Table, plan ExecutionPlan, conds []QueryCond) string {
+func GenerateIndexKeyPrefixFromPlan(tbInfo TableInfo, plan ExecutionPlan, conds []QueryCond) string {
 	if plan.PlanType != Idx {
 		return ""
 	}

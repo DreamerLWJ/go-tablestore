@@ -145,7 +145,7 @@ func (i *TableStore) QueryMessage(query MessageQuery) (res []Message, nextMarker
 	// 优先采纳 msgId 的查询
 	if query.MsgId != 0 {
 		seekKey = GenerateMsgKey(tbInfo.TableId, query.MsgId)
-		seekKeyPrefix = fmt.Sprintf(_msgKeyPrefix, tbInfo.TableId)
+		seekKeyPrefix = fmt.Sprintf(_primaryKeyPrefix, tbInfo.TableId)
 	} else {
 		// 提取所有的条件字段
 		cols := make([]string, 0, len(query.EqCond))

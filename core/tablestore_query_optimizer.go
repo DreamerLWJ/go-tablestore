@@ -5,7 +5,7 @@ import "strings"
 // QueryOptimizer 查询优化器
 // TODO 带有索引下推的优化器？
 type QueryOptimizer interface {
-	GeneratePlan(colNames []string, tbInfo Table) ExecutionPlan
+	GeneratePlan(colNames []string, tbInfo TableInfo) ExecutionPlan
 }
 
 type SimpleEqQueryOptimizer struct {
@@ -16,7 +16,7 @@ func NewSimpleEqQueryOptimizer() SimpleEqQueryOptimizer {
 }
 
 // GeneratePlan 初期的优化器，仅支持等值查询判断；对于范围查询可以先定位到
-func (s SimpleEqQueryOptimizer) GeneratePlan(colNames []string, tbInfo Table) (res ExecutionPlan) {
+func (s SimpleEqQueryOptimizer) GeneratePlan(colNames []string, tbInfo TableInfo) (res ExecutionPlan) {
 	var maxHitIdx Index        // 命中最长的索引
 	maxHitIdxPrefixLength := 0 // 命中最长的索引的前缀长度
 	var maxHitCombine []string // 命中最长的列组合

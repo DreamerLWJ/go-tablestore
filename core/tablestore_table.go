@@ -54,7 +54,7 @@ func (i *TableStore) SaveDBInfoWithTx(tx *badger.Txn, info GlobalDBInfo) error {
 }
 
 // GetMsgTableInfo 获取表信息
-func (i *TableStore) GetMsgTableInfo(tableName string) (res Table, exist bool, err error) {
+func (i *TableStore) GetMsgTableInfo(tableName string) (res TableInfo, exist bool, err error) {
 	err = i.db.View(func(txn *badger.Txn) error {
 		res, exist, err = i.GetMsgTableInfoWithTx(txn, tableName)
 		return err
@@ -62,15 +62,15 @@ func (i *TableStore) GetMsgTableInfo(tableName string) (res Table, exist bool, e
 	return
 }
 
-func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (res Table, exist bool, err error) {
+func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (res TableInfo, exist bool, err error) {
 	key := GenerateTableInfoKey(tableName)
 	item, err := txn.Get([]byte(key))
 	if err != nil {
 		if errors.Is(err, badger.ErrKeyNotFound) {
 			exist = false
-			return Table{}, false, nil
+			return TableInfo{}, false, nil
 		}
-		return Table{}, false, err
+		return TableInfo{}, false, err
 	}
 	err = item.Value(func(val []byte) error {
 		if err := json.Unmarshal(val, &res); err != nil {
@@ -80,13 +80,13 @@ func (i *TableStore) GetMsgTableInfoWithTx(txn *badger.Txn, tableName string) (r
 		return nil
 	})
 	if err != nil {
-		return Table{}, false, err
+		return TableInfo{}, false, err
 	}
 	return
 }
 
 // SaveMsgTableInfo 保存表信息
-func (i *TableStore) SaveMsgTableInfo(tbInfo Table) error {
+func (i *TableStore) SaveMsgTableInfo(tbInfo TableInfo) error {
 	if err := i.db.Update(func(txn *badger.Txn) error {
 		if err := i.SaveMsgTableInfoWithTx(txn, tbInfo); err != nil {
 			return err
@@ -98,7 +98,7 @@ func (i *TableStore) SaveMsgTableInfo(tbInfo Table) error {
 	return nil
 }
 
-func (i *TableStore) SaveMsgTableInfoWithTx(txn *badger.Txn, tbInfo Table) error {
+func (i *TableStore) SaveMsgTableInfoWithTx(txn *badger.Txn, tbInfo TableInfo) error {
 	key := GenerateTableInfoKey(tbInfo.TableName)
 	tbInfoBytes, err := json.Marshal(tbInfo)
 	if err != nil {
@@ -135,7 +135,7 @@ func (i *TableStore) CreateTable(tableName string, columns []ColumnInfo, idxs []
 		for _, idx := range idxs {
 			idx.Enable = true
 		}
-		table := Table{
+		table := TableInfo{
 			TableName: tableName,
 			TableId:   id,
 			Columns:   columns,
@@ -216,9 +216,9 @@ func (i *TableStore) DropMsgTable(tableName string) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
-		for it.Seek([]byte(_msgKeyPrefix)); it.ValidForPrefix([]byte(_msgKeyFormat)); it.Next() {
+		for it.Seek([]byte(_primaryKeyPrefix)); it.ValidForPrefix([]byte(_primaryKeyFormat)); it.Next() {
 			// TODO 验证迭代的过程中是否可以删除消息
-			err := txn.Delete([]byte(_msgKeyFormat))
+			err := txn.Delete([]byte(_primaryKeyFormat))
 			if err != nil {
 				return errors.Errorf("TableStore|DropMsgTable txn.Delete err:%s", err)
 			}
@@ -329,7 +329,7 @@ func (i *TableStore) CreateIndex(tableName string, idx Index) error {
 		defer it.Close()
 
 		// 给所有值加上索引
-		for it.Seek([]byte(_msgKeyPrefix)); it.ValidForPrefix([]byte(_msgKeyPrefix)); it.Next() {
+		for it.Seek([]byte(_primaryKeyPrefix)); it.ValidForPrefix([]byte(_primaryKeyPrefix)); it.Next() {
 			valBytes, err := it.Item().ValueCopy(nil)
 			if err != nil {
 				return err

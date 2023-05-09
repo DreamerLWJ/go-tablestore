@@ -5,7 +5,7 @@ import "testing"
 func TestSimpleEqQueryOptimizer_GeneratePlan(t *testing.T) {
 	_ = []string{"sender", "receiver", "create_time", "msg_type", "cost"}
 
-	tbInfo := Table{
+	tbInfo := TableInfo{
 		TableName: "test-table",
 		TableId:   1,
 		Columns:   []ColumnInfo{},

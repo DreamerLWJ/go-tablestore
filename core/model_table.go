@@ -18,10 +18,10 @@ const (
 )
 
 const (
-	_msgKeyPrefix          = "msg|t:%d|"
-	_indexKeyPrefix        = "idx_val|t:%d|i:%d|"
-	_indexInfoIdKeyPrefix  = "idx_inf_id|t:%d|"
-	_indexInfoColKeyPrefix = "idx_inf_col|t:%d|"
+	_primaryKeyPrefix      = "primary|t:%d|"      // 表主键前缀
+	_indexKeyPrefix        = "idx_val|t:%d|i:%d|" // 表二级索引前缀
+	_indexInfoIdKeyPrefix  = "idx_inf_id|t:%d|"   // 表二级索引信息前缀
+	_indexInfoColKeyPrefix = "idx_inf_col|t:%d|"  // 表列信息前缀
 
 	// 数据库元信息
 	_dbKeyFormat = "db_info"
@@ -36,7 +36,7 @@ const (
 	_indexInfoColKeyFormat = _indexInfoColKeyPrefix + "col:%s" //
 
 	// 表消息主键设计：msg|t:[table_code]|[padding_msg_id]
-	_msgKeyFormat = _msgKeyPrefix + "%s" // 消息主键
+	_primaryKeyFormat = _primaryKeyPrefix + "v:%s" // 消息主键
 
 	// 表二级索引设计：idx_val|t:[table_code]|i:[idx_code]|v:[idx_cols]
 	_indexKeyFormat = _indexKeyPrefix + "v:%s" // 二级索引，
@@ -73,16 +73,17 @@ func (d *GlobalDBInfo) AddTable(tableName string) bool {
 	return true
 }
 
-// Table 消息表，表没有主键，主键就是消息键
-type Table struct {
-	TableName string       `json:"tableName"` // 表名
-	TableId   uint64       `json:"tableCode"` // 表的唯一标识，用于节省存储空间
-	Columns   []ColumnInfo `json:"columns"`   // 列名
-	Indexs    []Index      `json:"indexs"`    // 索引列表
+// TableInfo 消息表，表没有主键，主键就是消息键
+type TableInfo struct {
+	TableName string       `json:"tableName"`   // 表名
+	TableId   uint64       `json:"tableCode"`   // 表的唯一标识，用于节省存储空间
+	Keys      []string     `json:"primaryKeys"` // 表主键
+	Columns   []ColumnInfo `json:"columns"`     // 列名
+	Indexs    []Index      `json:"indexs"`      // 索引列表
 }
 
 // ExistColumn return if column exist
-func (m *Table) ExistColumn(colName string) (exist bool) {
+func (m *TableInfo) ExistColumn(colName string) (exist bool) {
 	for _, column := range m.Columns {
 		if column.ColumnName == colName {
 			return true
@@ -92,7 +93,7 @@ func (m *Table) ExistColumn(colName string) (exist bool) {
 }
 
 // AddColumnInfo 添加列信息
-func (m *Table) AddColumnInfo(colInfo ColumnInfo) bool {
+func (m *TableInfo) AddColumnInfo(colInfo ColumnInfo) bool {
 	if m.ExistColumn(colInfo.ColumnName) {
 		return false
 	}
@@ -100,7 +101,7 @@ func (m *Table) AddColumnInfo(colInfo ColumnInfo) bool {
 }
 
 // DelColumnInfo 删除列信息
-func (m *Table) DelColumnInfo(colName string) bool {
+func (m *TableInfo) DelColumnInfo(colName string) bool {
 	index := -1
 	for i, column := range m.Columns {
 		if column.ColumnName == colName {
@@ -116,7 +117,7 @@ func (m *Table) DelColumnInfo(colName string) bool {
 }
 
 // ExistIndexInfo 返回是否存在对应的索引
-func (m *Table) ExistIndexInfo(colNames []string) (exist bool) {
+func (m *TableInfo) ExistIndexInfo(colNames []string) (exist bool) {
 	colMerge := strings.Join(colNames, _indexSeparate)
 	colMerge = strings.ToLower(colMerge)
 	for _, index := range m.Indexs {
@@ -129,7 +130,7 @@ func (m *Table) ExistIndexInfo(colNames []string) (exist bool) {
 }
 
 // AddIndexInfo 添加索引
-func (m *Table) AddIndexInfo(idx Index) bool {
+func (m *TableInfo) AddIndexInfo(idx Index) bool {
 	if exist := m.ExistIndexInfo(idx.ColumnNames); exist {
 		return false
 	}
@@ -192,7 +193,7 @@ func GenerateTableInfoKey(tableName string) string {
 
 // GenerateMsgKey 生成基于消息 ID 的主键
 func GenerateMsgKey(tableId uint64, msgId uint64) string {
-	return fmt.Sprintf(_msgKeyFormat, tableId, GetPaddingMsgId(msgId))
+	return fmt.Sprintf(_primaryKeyFormat, tableId, GetPaddingMsgId(msgId))
 }
 
 func GetPaddingMsgId(msgId uint64) string {
